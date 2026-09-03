@@ -7,8 +7,9 @@ Written 2026-06-28.
 CHAPTER 1: THE COMPANY AND THE PROBLEM
 ================================================================================
 
-Alpine Manufacturing GmbH is a fictional industrial equipment company operating
-across Europe. They make physical goods — bearings, precision couplings,
+Alpine Manufacturing GmbH is the anonymised name of an industrial equipment
+company operating across Europe. Its data was supplied for a hackathon, with
+company, product and customer identifiers anonymised. They make physical goods — bearings, precision couplings,
 industrial resins, drill components — the kind of hardware that ends up inside
 other machines. Their products are sold through 18 regional sales organisations
 spread across the EU: DACH (Germany, Austria, Switzerland), BeNeLux, Western EU,

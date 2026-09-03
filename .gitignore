@@ -17,3 +17,6 @@ data/compass.duckdb.wal
 # OS
 .DS_Store
 Thumbs.db
+
+# Client source data — not redistributable
+data/alpine-manufacturing-gmbh/
