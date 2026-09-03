@@ -3,6 +3,8 @@
 **Human-centred demand planning intelligence.**  
 AI agents surface evidence. You make the call. Every decision gets scored.
 
+Built in three days for a hackathon, with Manasi Patil.
+
 ---
 
 ## What it does
@@ -20,17 +22,17 @@ The result: planners see exactly what the data says before they commit, and the 
 
 ## What we found in the data
 
-We ran a Forecast Value Added (FVA) analysis on 23 historical Alpine Manufacturing planning cycles (68,126 item-months):
+We ran a Forecast Value Added (FVA) analysis on 23 historical Alpine planning cycles (68,126 item-months). Every figure below is recomputed by `compass.fva.get_headline_stats()` and cached in `data/headline_stats.json`:
 
 | Metric | Machine | Planner |
 |---|---|---|
 | MAE | 2,013 units | **1,574 units** |
 | WAPE | 19.2% | **15.0%** |
 
-- Planners improved accuracy by **21.8%** overall
-- Upward overrides helped **71%** of the time
-- Downward overrides hurt **66%** of the time
-- The pattern is consistent by reason type — and that's what Compass learns
+- Planner overrides cut MAE from 2,013 to 1,574 units, a reduction of **21.8%**, and WAPE from 19.2% to 15.0%
+- Planner overrides helped on **61.4%** of all rows, and on **64.3%** of rows where the override exceeded 5%
+- Split by direction, on overrides above 5%: upward overrides helped **69.9%** of the time (n=28,361), downward overrides helped **57.5%** of the time (n=23,186)
+- Planners add value in both directions, and more of it upward. That asymmetry is what Compass learns
 
 ---
 
@@ -41,6 +43,8 @@ We ran a Forecast Value Added (FVA) analysis on 23 historical Alpine Manufacturi
 ```bash
 pip install -r requirements.txt
 ```
+
+Two source files are not distributed with this repository: `alpine_sales_actuals.parquet` and `alpine_statistical_forecast.parquet`. Without them `scripts/setup.py` cannot rebuild the FVA cache. The app still runs, because `data/fva_base.parquet` and `data/headline_stats.json` are committed outputs of a previous run.
 
 Set your API key (needed for the live AI reconciler):
 
@@ -56,6 +60,7 @@ Without a key the app runs in demo mode with a rule-based stub.
 
 ```bash
 # Initialise the database and precompute cached files (run once)
+# Needs the two uncommitted source files above. Skip if you do not have them.
 python scripts/setup.py
 
 # Seed realistic historical decisions for demo (run once)
@@ -84,7 +89,7 @@ Walk through a real decision:
 
 ### Replay Dashboard
 
-Shows what actually happened across 23 historical planning cycles. Three lines on one chart: machine forecast error, planner error, Compass-guided error. The Compass line is consistently the lowest.
+Shows what actually happened across 23 historical planning cycles. Two measured lines, machine forecast error and planner error, plus a third projected Compass line. The Compass line is a projection, not a measurement: Compass has no scored decisions of its own yet, so there is nothing to plot. It is labelled projected in the chart and in the caption above it.
 
 ---
 
@@ -146,17 +151,19 @@ Not using: Neo4j, vector databases, LangChain. Every cut was made because the si
 
 ## Data
 
-Alpine Manufacturing GmbH — a fictional Stuttgart-based industrial group used as the demo dataset.
+Alpine Manufacturing GmbH is the anonymised name of the industrial group whose data was supplied for the hackathon. Company, product and customer identifiers are anonymised throughout.
 
 - **600 SKUs** across Precision Components, Consumer Products, Specialty Materials
 - **18 EU sales organisations** (DACH, BeNeLux, Western EU, Nordics, Eastern EU, UK, Southern EU)
 - **4 channels** (B2B key accounts, distributors, wholesale, e-commerce)
-- **2.8M sales rows** (May 2023 – May 2026)
+- **2.8M sales rows** (May 2023 to May 2026), in `alpine_sales_actuals.parquet`, which is not committed
 - **23 scored planning cycles** for FVA replay
 
-Source files live in `data/alpine-manufacturing-gmbh/`. Forecast pipeline outputs (live forecasts, backtest results) live in the `forecast-output/` subfolder.
+**The source data is not distributed with this repository.** It is anonymised client data supplied for the hackathon and is not mine to republish. What is committed is the aggregate output: `data/fva_base.parquet` (68,126 scored rows), `data/headline_stats.json` and `data/replay_chart_cache.parquet`. Every figure quoted above recomputes from those.
 
-> **Note on parquet loading:** Alpine's files use `uint32` dictionary-encoded columns that crash `pandas.read_parquet`. Always use `compass.loader` functions — they decode via PyArrow before converting to pandas.
+This means the **Replay Dashboard runs from a fresh clone and the Live Decision view does not**, because the five signal agents read the per-table source files. To run Live Decision you need `data/alpine-manufacturing-gmbh/` populated with tables matching the schema in `compass/loader.py`.
+
+> **Note on parquet loading:** the source files use `uint32` dictionary-encoded columns that crash `pandas.read_parquet`. Always use `compass.loader` functions, which decode via PyArrow before converting to pandas.
 
 ---
 
@@ -193,8 +200,14 @@ scripts/
   precompute.py      — standalone cache regeneration
 
 data/
-  alpine-manufacturing-gmbh/   — source parquet files
+  alpine-manufacturing-gmbh/   — source parquet files (not distributed)
   compass.duckdb               — generated by setup.py (gitignored)
   headline_stats.json          — pre-computed FVA summary stats
   replay_chart_cache.parquet   — pre-computed cycle-by-cycle accuracy
 ```
+
+---
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).

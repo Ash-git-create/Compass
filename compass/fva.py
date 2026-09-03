@@ -173,6 +173,8 @@ def get_headline_stats() -> dict[str, object]:
     """Return defensible, method-labelled statistics for slides and UI."""
     df = _get_fva_df()
     meaningful = df[df["is_meaningful_override"]]
+    upward = meaningful[meaningful["override_pct"] > 0]
+    downward = meaningful[meaningful["override_pct"] < 0]
     return {
         "method": "H+1 full-month comparison; actuals aggregated across channels",
         "cutoffs": int(df["cutoff_date"].nunique()),
@@ -184,6 +186,10 @@ def get_headline_stats() -> dict[str, object]:
         "downward_share_meaningful": float((meaningful["override_pct"] < 0).mean()),
         "pct_helped_all": float(df["planner_helped"].mean()),
         "pct_helped_meaningful": float(meaningful["planner_helped"].mean()),
+        "n_upward_meaningful": int(len(upward)),
+        "pct_helped_upward_meaningful": float(upward["planner_helped"].mean()),
+        "n_downward_meaningful": int(len(downward)),
+        "pct_helped_downward_meaningful": float(downward["planner_helped"].mean()),
         "mae_machine": float(df["machine_err"].mean()),
         "mae_planner": float(df["planner_err"].mean()),
         "wape_machine": _wape(df["machine_err"], df["actual_qty"]),

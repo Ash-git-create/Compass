@@ -34,86 +34,13 @@ REQUIRED_COLUMNS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Deterministic fallback data
-# ---------------------------------------------------------------------------
-def _fallback_daily_data() -> pd.DataFrame:
-    """Create smooth deterministic daily data across multiple years."""
-    dates = pd.date_range("2024-01-01", "2026-06-30", freq="D")
-    total = max(len(dates) - 1, 1)
-
-    rows: list[dict[str, Any]] = []
-
-    for index, date_value in enumerate(dates):
-        maturity = index / total
-
-        baseline = (
-            2310
-            - 180 * maturity
-            + 18 * math.sin(index / 54)
-            + 8 * math.sin(index / 17)
-        )
-
-        machine_error = (
-            baseline
-            + 10 * math.sin(index / 31)
-            + 4 * math.cos(index / 11)
-        )
-
-        planner_error = (
-            baseline
-            + 34
-            - 12 * maturity
-            + 8 * math.sin(index / 28)
-            + 5 * math.cos(index / 19)
-        )
-
-        compass_error = (
-            baseline
-            + 24
-            - 105 * maturity
-            + 7 * math.sin(index / 43)
-            + 3 * math.cos(index / 23)
-        )
-
-        helped_rate = min(
-            0.72,
-            max(
-                0.34,
-                0.39
-                + 0.25 * maturity
-                + 0.025 * math.sin(index / 40),
-            ),
-        )
-
-        reviewed = 130 + (index % 17)
-
-        rows.append(
-            {
-                "cutoff_date": date_value,
-                "mae_machine": round(machine_error, 2),
-                "mae_planner": round(planner_error, 2),
-                "mae_compass": round(compass_error, 2),
-                "n_rows": reviewed,
-                "pct_helped": round(helped_rate, 4),
-            }
-        )
-
-    return pd.DataFrame(rows)
-
-
-def _fallback_stats() -> dict[str, Any]:
-    return {
-        "override_rate": 0.999,
-        "mae_change_pct": 1.7,
-        "upward_pct_helped": 0.71,
-        "downward_pct_helped": 0.341,
-        "compass_is_projected": True,
-    }
-
-
 def _project_compass(chart: pd.DataFrame) -> pd.Series:
-    """Create a smooth projected Compass series if real values are unavailable."""
+    """Projected Compass series, shown when no scored Compass decisions exist yet.
+
+    This is NOT a measurement. It is min(machine, planner) tapered by up to
+    4.5 percent as the run matures, so the chart has a third line to illustrate
+    the intended shape. Every surface that renders it must label it projected.
+    """
     machine = chart["mae_machine"].astype(float).reset_index(drop=True)
     planner = chart["mae_planner"].astype(float).reset_index(drop=True)
 
@@ -174,7 +101,7 @@ def _normalise_loaded_data(chart: pd.DataFrame) -> pd.DataFrame:
 def get_replay_data(
     force_fallback: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any], str]:
-    """Load real replay files when available, otherwise use fallback data."""
+    """Load the cached replay files. Returns empty data when they are absent."""
     if not force_fallback:
         try:
             chart_path = DATA_DIR / "replay_chart_cache.parquet"
@@ -193,7 +120,7 @@ def get_replay_data(
         except Exception:
             pass
 
-    return _fallback_daily_data(), _fallback_stats(), "fallback"
+    return pd.DataFrame(columns=sorted(REQUIRED_COLUMNS)), {}, "missing"
 
 
 # ---------------------------------------------------------------------------
@@ -657,8 +584,22 @@ def _story_card(
 def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
     _install_css()
 
-    chart, stats, _ = get_replay_data(force_fallback)
+    chart, stats, source = get_replay_data(force_fallback)
+
+    if source == "missing" or chart.empty:
+        st.warning(
+            "No cached replay data found. Run `python scripts/setup.py` to build "
+            "`data/replay_chart_cache.parquet` and `data/headline_stats.json`."
+        )
+        return
+
     chart = chart.sort_values("cutoff_date").reset_index(drop=True)
+
+    st.caption(
+        "Machine and planner lines are measured from 23 historical planning cycles. "
+        "The Compass line is a projection, not a measurement. Compass has no scored "
+        "decisions of its own yet."
+    )
 
     minimum_date = pd.to_datetime(chart["cutoff_date"]).min().date()
     maximum_date = pd.to_datetime(chart["cutoff_date"]).max().date()
@@ -829,7 +770,7 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
     with card_3:
         _story_card(
             "✦",
-            "Compass improvement",
+            "Compass projected improvement",
             f"{compass_effect:.1f}% better",
             "How much closer Compass-guided plans were to actual demand.",
             "Improving accuracy",
@@ -891,7 +832,7 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
             2.8,
         ),
         (
-            "Compass-supported plan",
+            "Compass (projected)",
             "mae_compass",
             "#A78BFA",
             "solid",
@@ -916,7 +857,7 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
                     smoothing=0.8,
                 ),
                 marker=dict(
-                    size=5 if name != "Compass-supported plan" else 6,
+                    size=5 if name != "Compass (projected)" else 6,
                     color=color,
                     line=dict(
                         width=1,
@@ -953,7 +894,7 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
     fig.add_annotation(
         x=latest["period_label"],
         y=float(latest["mae_compass"]),
-        text=f"{latest_improvement:,.0f} points better",
+        text=f"{latest_improvement:,.0f} points better (projected)",
         showarrow=True,
         arrowhead=2,
         ax=-82,
@@ -1098,12 +1039,12 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
             {
                 "Model forecast": model_error,
                 "Planner choice": planner_error,
-                "Compass-supported plan": compass_error,
+                "Compass (projected)": compass_error,
             },
             key={
                 "Model forecast": model_error,
                 "Planner choice": planner_error,
-                "Compass-supported plan": compass_error,
+                "Compass (projected)": compass_error,
             }.get,
         )
 
@@ -1127,7 +1068,7 @@ def render(force_fallback: bool = False, dark_mode: bool = True) -> None:
         )
 
         detail_c.metric(
-            "Compass-supported plan",
+            "Compass (projected)",
             f"{compass_error:,.0f}",
             delta=f"{compass_error - model_error:+,.0f} vs model",
             delta_color="inverse",
