@@ -3,7 +3,7 @@
 **Human-centred demand planning intelligence.**  
 AI agents surface evidence. You make the call. Every decision gets scored.
 
-Built in three days for a hackathon, with Manasi Patil.
+Built in 2 days for an AI Hackathon.
 
 ---
 
